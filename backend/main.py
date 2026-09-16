@@ -1,22 +1,28 @@
 import os
 
-# Suppress TensorFlow logging & set backend options before imports
+# 1. Environment Configuration & Warning Suppression
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["USE_TF"] = "0"
 os.environ["USE_TORCH"] = "1"
 
-import faiss
-import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Dict, Any
-from sentence_transformers import SentenceTransformer
+from typing import List
 
-app = FastAPI(title="Institutional Memory Engine")
+# Import modules from our project files
+from schemas import IngestResponse, QueryRequest, QueryResponse, EntityNode, KnowledgeEdge
+from graph_engine import KnowledgeGraphBuilder
+from rag_pipeline import VectorRAGEngine
 
-# Allow CORS for Next.js frontend
+# 2. Initialize FastAPI Application
+app = FastAPI(
+    title="Institutional Memory & Decision Traceability API",
+    description="Backend engine combining Knowledge Graphs and RAG for decision lineage.",
+    version="1.0.0"
+)
+
+# 3. Enable CORS for Next.js Frontend Integration
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,99 +31,113 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize Embedding Model & FAISS Vector Store
-embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
-dimension = 384
-index = faiss.IndexFlatL2(dimension)
+# 4. Initialize Core Processing Engines
+graph_builder = KnowledgeGraphBuilder()
+rag_engine = VectorRAGEngine()
 
-# In-memory document store and graph nodes
-document_store: List[str] = []
-nodes_db: List[Dict[str, Any]] = []
-edges_db: List[Dict[str, Any]] = []
+# Persistent In-Memory Storage Arrays for Graph Visualization
+global_nodes: List[EntityNode] = []
+global_edges: List[KnowledgeEdge] = []
 
-class QueryRequest(BaseModel):
-    query: str
+
+# 5. API Endpoints
 
 @app.get("/")
-def read_root():
-    return {"status": "Institutional Memory Engine API is running"}
+def health_check():
+    """Health check route to verify backend status and indexed documents count."""
+    return {
+        "status": "Institutional Memory Engine API is running",
+        "indexed_chunks": len(rag_engine.chunks_store),
+        "total_graph_nodes": len(global_nodes)
+    }
 
-@app.post("/api/ingest")
+
+@app.post("/api/ingest", response_model=IngestResponse)
 async def ingest_document(file: UploadFile = File(...)):
-    """Ingest a text/document file, create embeddings, and create graph nodes."""
+    """
+    Ingests text/markdown documents:
+    1. Stores text chunks in FAISS for vector semantic search.
+    2. Runs SpaCy NLP to extract People, Events, and Decisions into Knowledge Graph triples.
+    """
     try:
         content_bytes = await file.read()
         text_content = content_bytes.decode("utf-8")
     except Exception:
-        raise HTTPException(status_code=400, detail="Only UTF-8 plain text files are supported in this demo.")
+        raise HTTPException(
+            status_code=400, 
+            detail="Only UTF-8 encoded text files (.txt, .md) are supported."
+        )
+
+    if not text_content.strip():
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    # Step A: Process document into Vector RAG Store
+    rag_engine.add_document(file.filename, text_content)
+
+    # Step B: Extract Graph Entities & Triples using SpaCy
+    extracted_nodes, extracted_edges = graph_builder.extract_triples(text_content, file.filename)
     
-    # Store raw text
-    doc_id = len(document_store)
-    document_store.append(text_content)
-    
-    # Generate Vector Embedding & Add to FAISS Index
-    embedding = embedding_model.encode([text_content])
-    index.add(np.array(embedding, dtype=np.float32))
-    
-    # Create nodes for visualization
-    doc_node_id = f"doc_{doc_id}"
-    person_node_id = f"person_{doc_id}"
-    decision_node_id = f"dec_{doc_id}"
-    
-    new_nodes = [
-        {"id": doc_node_id, "label": f"📄 {file.filename}", "type": "document"},
-        {"id": person_node_id, "label": f"👤 Lead Contributor ({file.filename})", "type": "person"},
-        {"id": decision_node_id, "label": f"⚡ Processed Record #{doc_id + 1}", "type": "decision"}
-    ]
-    
-    new_edges = [
-        {"id": f"e_{doc_node_id}_{person_node_id}", "source": doc_node_id, "target": person_node_id, "label": "authored by"},
-        {"id": f"e_{person_node_id}_{decision_node_id}", "source": person_node_id, "target": decision_node_id, "label": "decided"}
-    ]
-    
-    nodes_db.extend(new_nodes)
-    edges_db.extend(new_edges)
-    
-    return {
-        "status": "success",
-        "filename": file.filename,
-        "nodes": new_nodes,
-        "edges": new_edges
-    }
+    # Step C: Save to central graph state
+    global_nodes.extend(extracted_nodes)
+    global_edges.extend(extracted_edges)
+
+    return IngestResponse(
+        status="success",
+        filename=file.filename,
+        extracted_entities=extracted_nodes,
+        edges=extracted_edges
+    )
+
 
 @app.get("/api/graph")
 def get_graph():
-    """Retrieve all visual graph nodes and edges."""
-    return {"nodes": nodes_db, "edges": edges_db}
-
-@app.post("/api/query")
-def query_memory(req: QueryRequest):
-    """Perform RAG search against stored document vectors."""
-    if index.ntotal == 0:
-        return {
-            "answer": "No documents ingested yet. Please upload a file first.",
-            "sources": []
-        }
-    
-    query_vector = embedding_model.encode([req.query])
-    distances, indices = index.search(np.array(query_vector, dtype=np.float32), k=min(3, index.ntotal))
-    
-    retrieved_contexts = []
-    for idx in indices[0]:
-        if idx < len(document_store):
-            retrieved_contexts.append(document_store[idx])
-            
-    combined_context = "\n---\n".join(retrieved_contexts)
-    
-    answer = f"Based on historical records: '{combined_context[:300]}...'"
-    
+    """Returns all extracted knowledge graph nodes and edges for visual rendering."""
     return {
-        "query": req.query,
-        "answer": answer,
-        "sources": retrieved_contexts
+        "nodes": global_nodes,
+        "edges": global_edges
     }
 
+
+@app.post("/api/query", response_model=QueryResponse)
+def query_memory(req: QueryRequest):
+    """
+    Traces past organizational decisions:
+    1. Fetches top matching vector chunks using FAISS.
+    2. Generates an answer using the Gemini API based on retrieved context.
+    3. Returns relevant decision nodes for graph traceability.
+    """
+    # Step A: Perform vector similarity search
+    retrieved_chunks = rag_engine.search(req.query, top_k=req.top_k)
+    
+    if not retrieved_chunks:
+        return QueryResponse(
+            query=req.query,
+            synthesized_answer="No relevant institutional memory records found. Please ingest documents first.",
+            relevant_nodes=[],
+            sources=[]
+        )
+
+    # Step B: Synthesize AI Answer via Gemini Model
+    synthesized_answer = rag_engine.synthesize_answer(req.query, retrieved_chunks)
+
+    # Step C: Format source document citations
+    sources = [f"[{c['filename']}] {c['text']}" for c in retrieved_chunks]
+    
+    # Step D: Pull matching graph nodes for UI context tracing
+    matching_nodes = [
+        n for n in global_nodes 
+        if n.type in ["Decision", "Document", "Person"]
+    ][:5]
+
+    return QueryResponse(
+        query=req.query,
+        synthesized_answer=synthesized_answer,
+        relevant_nodes=matching_nodes,
+        sources=sources
+    )
+
+
+# 6. Server Execution Routine
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
-    
