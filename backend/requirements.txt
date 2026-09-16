@@ -2,7 +2,8 @@ fastapi
 uvicorn
 python-multipart
 pydantic
-google-genai
-sentence-transformers
-faiss-cpu
 numpy
+faiss-cpu
+sentence-transformers
+google-genai
+spacy 

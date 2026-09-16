@@ -1,4 +1,11 @@
 import os
+
+# Suppress TensorFlow logging & set backend options before imports
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["USE_TF"] = "0"
+os.environ["USE_TORCH"] = "1"
+
 import faiss
 import numpy as np
 from fastapi import FastAPI, UploadFile, File, HTTPException
@@ -112,4 +119,5 @@ def query_memory(req: QueryRequest):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("main:app", host="", port=8000, reload=True)
+    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    
