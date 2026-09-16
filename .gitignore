@@ -42,6 +42,7 @@ desktop.ini
 out/
 build/
 dist/
+*.tsbuildinfo
 
 # Logs
 logs
