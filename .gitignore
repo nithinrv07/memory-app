@@ -49,3 +49,8 @@ logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# Runtime indices and data stores
+*.index
+*.pkl
+storage_*

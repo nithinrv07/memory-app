@@ -1,0 +1,6 @@
+Project: Institutional Memory Platform
+Author: Alex Rivera
+Date: November 02
+
+Alex Rivera evaluated vector databases for natural language retrieval.
+After testing FAISS and Pinecone, Alex decided to implement FAISS locally for vector similarity search.

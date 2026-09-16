@@ -1,0 +1,6 @@
+Project: Compliance Review
+Author: David Chen
+Date: December 05
+
+David Chen conducted a security audit of the API endpoints.
+It was decided to mandate OAuth2 bearer token authentication across all microservices starting next sprint.

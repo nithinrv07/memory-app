@@ -4,6 +4,11 @@ import numpy as np
 from typing import List, Dict
 from sentence_transformers import SentenceTransformer
 from google import genai
+from dotenv import load_dotenv
+
+# Load environment variables from .env in backend directory or parent directories
+load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 
 class VectorRAGEngine:
     def __init__(self, model_name: str = 'all-MiniLM-L6-v2'):
@@ -14,7 +19,7 @@ class VectorRAGEngine:
         
         # Initialize Gemini Client
         api_key = os.environ.get("GEMINI_API_KEY")
-        self.client = genai.Client() if api_key else None
+        self.client = genai.Client(api_key=api_key) if api_key else None
 
     def add_document(self, filename: str, text: str):
         chunks = [c.strip() for c in text.split("\n\n") if c.strip()]
@@ -61,8 +66,11 @@ Context:
 Question: {query}
 Answer:"""
 
-        response = self.client.models.generate_content(
-            model='gemini-2.5-flash',
-            contents=prompt,
-        )
-        return response.text
+        try:
+            response = self.client.models.generate_content(
+                model='gemini-3.6-flash',
+                contents=prompt,
+            )
+            return response.text
+        except Exception as e:
+            return f"Retrieved Context:\n{context[:300]}...\n\n(AI synthesis fallback: {str(e)})"
