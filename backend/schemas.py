@@ -4,14 +4,14 @@ from typing import List, Optional, Dict, Any
 class EntityNode(BaseModel):
     id: str
     label: str
-    type: str  # Document, Person, Event, Decision
+    type: str  
     metadata: Optional[Dict[str, Any]] = {}
 
 class KnowledgeEdge(BaseModel):
     id: str
     source: str
     target: str
-    relation: str  # authored_by, decided_at, references
+    relation: str  
 
 class IngestResponse(BaseModel):
     status: str

@@ -7,3 +7,4 @@ faiss-cpu
 sentence-transformers
 google-genai
 spacy 
+python-dotenv
