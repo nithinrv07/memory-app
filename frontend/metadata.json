@@ -1,0 +1,6 @@
+{
+  "name": "Institutional Memory Platform",
+  "description": "Dual-engine engineering lineage platform combining SpaCy-style Knowledge Graph triple extraction and Dense Vector RAG with Gemini natural language synthesis and interactive decision topology.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
